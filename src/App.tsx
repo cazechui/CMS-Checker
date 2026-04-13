@@ -3,8 +3,6 @@ import { GoogleGenAI, Type, ThinkingLevel } from '@google/genai';
 import { UploadCloud, FileText, AlertCircle, CheckCircle2, Loader2, X, ArrowRightLeft } from 'lucide-react';
 import { cn } from './lib/utils';
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -77,12 +75,14 @@ export default function App() {
     if (e.target.files) {
       setSourceFiles(prev => [...prev, ...Array.from(e.target.files!)]);
     }
+    e.target.value = '';
   };
 
   const handleCmsFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       setCmsDraftFiles(prev => [...prev, ...Array.from(e.target.files!)]);
     }
+    e.target.value = '';
   };
 
   const removeSourceFile = (index: number) => {
@@ -103,11 +103,18 @@ export default function App() {
       return;
     }
 
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey || apiKey === 'undefined' || apiKey === 'null') {
+      setError('GEMINI_API_KEY is missing. Please add it to your Vercel Environment Variables and redeploy.');
+      return;
+    }
+
     setIsAnalyzing(true);
     setError(null);
     setAnalysisResult(null);
 
     try {
+      const ai = new GoogleGenAI({ apiKey });
       const parts: any[] = [];
 
       // Add source files
@@ -191,7 +198,9 @@ Use plain text with \\n for line breaks, do not use markdown.`;
 
       const resultText = response.text;
       if (resultText) {
-        setAnalysisResult(JSON.parse(resultText));
+        // Strip potential markdown code blocks that the AI sometimes includes
+        const cleanText = resultText.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '').trim();
+        setAnalysisResult(JSON.parse(cleanText));
         playSuccessSound();
         setTimeout(() => {
           resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
